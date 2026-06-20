@@ -1,3 +1,7 @@
 {
-  "commands": []
+  "stateId": 0,
+  "reqId": 0,
+  "mode": "idle",
+  "target": null,
+  "req": null
 }
