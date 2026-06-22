@@ -48,12 +48,11 @@ end
 -- ===== CONFIG ==================================================
 local PUNCH_OFFSET_X  = 0
 local PUNCH_OFFSET_Y  = 8        -- your tuned value
-local HITS_TO_RAGDOLL = 4        -- 4 M1s = ragdoll
 local COMBO_INTERVAL  = 0.35     -- delay between M1s (combo timing)
--- hit-and-run positioning:
-local SAFE_DEPTH      = 25       -- studs BELOW the target to hide (safe spot)
-local BEHIND_DIST     = 3.5      -- studs behind the target when striking
-local SAFE_TIME       = 1.0      -- seconds hidden under between combos
+-- positioning:
+local ABOVE_HEIGHT    = 4        -- studs ABOVE the target (keep in M1 range; tune)
+local SAFE_DEPTH      = 25       -- studs BELOW target to flee to when damaged
+local FLEE_TIME       = 0.6      -- seconds to stay below after taking damage
 
 -- Admins (so only the bot in the admin's server answers list requests)
 local ADMIN_IDS = {
@@ -165,50 +164,69 @@ end
 local currentMode   = "idle"   -- "idle" | "kill" | "guardian"
 local currentTarget = nil
 
--- ===== COMBAT (hit-and-run) ===================================
--- Hide UNDER the target (can't be hit), then snap BEHIND for the M1
--- burst, then the loop drops us back under. Bails if state changes.
-local function stillOn(name)
-	return currentMode == "kill" and currentTarget == name
-end
+-- ===== COMBAT (glue above, flee below on damage) ==============
+-- Stay glued directly ABOVE the target, facing straight down, and spam
+-- M1 — ground players can't reach or block. If we take ANY damage,
+-- instantly drop far BELOW the target for a moment to escape, then resume.
+local RunService = game:GetService("RunService")
+local fleeUntil = 0
 
-local function engageOnce(name)
-	local target = Players:FindFirstChild(name)
+-- Re-position every frame so the bot can't be knocked away or blocked.
+RunService.Heartbeat:Connect(function()
+	if currentMode ~= "kill" or not currentTarget then return end
+	local target = Players:FindFirstChild(currentTarget)
 	if not target then return end
-	if not (rig(target) and rig(LP)) then return end
-
-	-- 1) strike immediately (no startup delay): pop behind for each M1
-	for _ = 1, HITS_TO_RAGDOLL do
-		if not stillOn(name) then break end
-		local _, tH  = rig(target)
-		local _, myH = rig(LP)
-		if not (tH and myH) then break end
-		local behindPos = (tH.CFrame * CFrame.new(0, 0, BEHIND_DIST)).Position
-		myH.CFrame = CFrame.lookAt(behindPos, tH.Position)  -- behind + facing them
-		punch()
-		task.wait(COMBO_INTERVAL)
-	end
-
-	-- 2) then hide under the target to recover while they're ragdolled
-	if not stillOn(name) then return end
 	local _, tHRP  = rig(target)
 	local _, myHRP = rig(LP)
-	if tHRP and myHRP then
-		myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)
-	end
-	task.wait(SAFE_TIME)
-end
+	if not (tHRP and myHRP) then return end
 
--- Persistent engage loop: keeps the target ragdolled until Stop.
+	if os.clock() < fleeUntil then
+		myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)        -- flee below
+	else
+		local abovePos = tHRP.Position + Vector3.new(0, ABOVE_HEIGHT, 0)
+		myHRP.CFrame = CFrame.lookAt(abovePos, tHRP.Position)             -- glue above, facing down
+	end
+end)
+
+-- Punch on a steady cadence whenever engaged and not fleeing.
 task.spawn(function()
 	while true do
-		if currentMode == "kill" and currentTarget then
-			if Players:FindFirstChild(currentTarget) then
-				engageOnce(currentTarget)        -- repeats -> perma-ragdoll
-			end
+		if currentMode == "kill" and currentTarget
+			and os.clock() >= fleeUntil
+			and Players:FindFirstChild(currentTarget) then
+			punch()
 		end
-		task.wait(0.15)
+		task.wait(COMBO_INTERVAL)
 	end
+end)
+
+-- Damage reaction: any health drop -> instantly flee below the target.
+local lastHealth = math.huge
+local function onHealth(h)
+	if h < lastHealth - 0.5 and currentMode == "kill" and currentTarget then
+		fleeUntil = os.clock() + FLEE_TIME
+		local target = Players:FindFirstChild(currentTarget)
+		local _, tHRP  = rig(target)
+		local _, myHRP = rig(LP)
+		if tHRP and myHRP then
+			myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)
+		end
+	end
+	lastHealth = h
+end
+
+local function hookHealth(char)
+	char = char or LP.Character
+	if not char then return end
+	local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 5)
+	if not hum then return end
+	lastHealth = hum.Health
+	hum.HealthChanged:Connect(onHealth)
+end
+hookHealth(LP.Character)
+LP.CharacterAdded:Connect(function(char)
+	task.wait(0.2)
+	hookHealth(char)
 end)
 
 -- ===== PLAYER LIST -> WEBHOOK ==================================
