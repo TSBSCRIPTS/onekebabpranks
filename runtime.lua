@@ -79,7 +79,19 @@ end
 -- GitHub state doc (raw CDN + cache-buster)
 local OWNER, REPO, FILE = "TSBSCRIPTS", "onekebabpranks", "commands.json"
 local RAW = string.format("https://raw.githubusercontent.com/%s/%s/main/%s", OWNER, REPO, FILE)
-local POLL_INTERVAL = 0.5   -- lower = snappier command pickup (raw CDN has no strict rate limit)
+local GH_API = string.format("https://api.github.com/repos/%s/%s/contents/%s", OWNER, REPO, FILE)
+local POLL_INTERVAL = 1   -- 1s = 3600/hr, safely under the API's 5000/hr
+
+-- Read-only token (read-only on a PUBLIC repo = zero risk even if seen) from
+-- a LOCAL file, so the bot can use the GitHub API (instant) instead of the
+-- laggy raw CDN. Without it, falls back to raw (slow).
+local GH_TOKEN_FILE = "gh_read_token.txt"
+local function loadGhReadToken()
+	local t = ""
+	pcall(function() if isfile and isfile(GH_TOKEN_FILE) then t = readfile(GH_TOKEN_FILE) end end)
+	return (t or ""):gsub("%s+", "")
+end
+local GH_READ_TOKEN = loadGhReadToken()
 
 -- ===== EXECUTOR HTTP (for webhook POST) =======================
 local httpRequest = http_request or request
@@ -258,9 +270,30 @@ end)
 local lastStateId = 0
 
 local function poll()
-	local url = RAW .. "?cb=" .. os.time() .. "_" .. tostring(math.random(1, 1000000))
-	local ok, body = fetchUrl(url)
-	if not ok then warn("[bot] poll failed:", body) return end
+	local cb = os.time() .. "_" .. tostring(math.random(1, 1000000))
+	local body
+	-- Prefer the GitHub API (instant). Needs the read token.
+	if httpRequest and GH_READ_TOKEN ~= "" then
+		local ok, resp = pcall(httpRequest, {
+			Url = GH_API .. "?ref=main&cb=" .. cb,
+			Method = "GET",
+			Headers = {
+				["Authorization"] = "token " .. GH_READ_TOKEN,
+				["Accept"] = "application/vnd.github.raw",
+				["User-Agent"] = "tsb-bot",
+				["Cache-Control"] = "no-cache",
+			},
+		})
+		if ok and type(resp) == "table" and resp.StatusCode == 200 and resp.Body and resp.Body ~= "" then
+			body = resp.Body
+		end
+	end
+	-- Fallback: laggy raw CDN (used only if no token configured / API failed)
+	if not body then
+		local ok2, b2 = fetchUrl(RAW .. "?cb=" .. cb)
+		if ok2 then body = b2 end
+	end
+	if not body then warn("[bot] poll failed (no body)") return end
 
 	local good, data = pcall(function() return HttpService:JSONDecode(body) end)
 	if not good or type(data) ~= "table" then return end
