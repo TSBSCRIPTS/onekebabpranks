@@ -85,6 +85,24 @@ local POLL_INTERVAL = 0.5   -- lower = snappier command pickup (raw CDN has no s
 local httpRequest = http_request or request
 	or (syn and syn.request) or (http and http.request)
 
+-- GET with aggressive no-cache headers — defeats raw.githubusercontent's
+-- CDN caching (the usual cause of slow command pickup). Falls back to HttpGet.
+local function fetchUrl(url)
+	if httpRequest then
+		local ok, resp = pcall(httpRequest, {
+			Url = url, Method = "GET",
+			Headers = {
+				["Cache-Control"] = "no-cache, no-store, max-age=0",
+				["Pragma"] = "no-cache",
+			},
+		})
+		if ok and type(resp) == "table" and resp.Body and resp.Body ~= "" then
+			return true, resp.Body
+		end
+	end
+	return pcall(function() return game:HttpGet(url) end)
+end
+
 -- ===== M1 / PUNCH (your method, cached) ========================
 local punchBtn
 local function resolvePunchButton()
@@ -241,7 +259,7 @@ local lastStateId = 0
 
 local function poll()
 	local url = RAW .. "?cb=" .. os.time() .. "_" .. tostring(math.random(1, 1000000))
-	local ok, body = pcall(function() return game:HttpGet(url) end)
+	local ok, body = fetchUrl(url)
 	if not ok then warn("[bot] poll failed:", body) return end
 
 	local good, data = pcall(function() return HttpService:JSONDecode(body) end)
