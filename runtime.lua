@@ -179,18 +179,11 @@ task.spawn(function()
 end)
 
 -- ===== PLAYER LIST -> WEBHOOK ==================================
-local function postPlayers(reqId)
-	print("[bot] postPlayers() called for req", reqId)
+local function postWebhook(contentStr)
 	if not httpRequest then warn("[bot] NO executor HTTP function (http_request/request) found!") return end
 	local url = loadWebhookUrl()
-	print("[bot] webhook url length:", #url)
 	if url == "" then warn("[bot] empty webhook url") return end
-	local names = {}
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= LP then names[#names + 1] = p.Name end
-	end
-	local payload = HttpService:JSONEncode({ type = "players", players = names, reqId = reqId, ts = os.time() })
-	local body    = HttpService:JSONEncode({ content = payload })
+	local body = HttpService:JSONEncode({ content = contentStr })
 	local ok, resp = pcall(httpRequest, {
 		Url = url, Method = "POST",
 		Headers = { ["Content-Type"] = "application/json" },
@@ -198,13 +191,23 @@ local function postPlayers(reqId)
 	})
 	if not ok then
 		warn("[bot] webhook call ERRORED:", resp)
-	else
-		local code = (type(resp) == "table" and (resp.StatusCode or resp.Status)) or "?"
-		print("[bot] webhook POST StatusCode=" .. tostring(code) .. " (players=" .. #names .. ")")
-		if type(resp) == "table" and resp.Body and tostring(code) ~= "204" then
-			print("[bot] webhook response body:", tostring(resp.Body))
-		end
+		return
 	end
+	local code = (type(resp) == "table" and (resp.StatusCode or resp.Status)) or "?"
+	print("[bot] webhook POST StatusCode=" .. tostring(code))
+	if type(resp) == "table" and resp.Body and tostring(code) ~= "204" then
+		print("[bot] webhook response body:", tostring(resp.Body))
+	end
+end
+
+local function postPlayers(reqId)
+	print("[bot] postPlayers() for req", reqId)
+	local names = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LP then names[#names + 1] = p.Name end
+	end
+	local payload = HttpService:JSONEncode({ type = "players", players = names, reqId = reqId, ts = os.time() })
+	postWebhook(payload)
 end
 
 -- ===== POLL THE STATE DOC =====================================
@@ -243,6 +246,7 @@ end
 
 task.spawn(function()
 	print("[bot] runtime online — watching", OWNER .. "/" .. REPO)
+	postWebhook("🤖 bot online — server " .. tostring(game.JobId))  -- visible startup ping
 	while true do
 		pcall(poll)
 		task.wait(POLL_INTERVAL)
