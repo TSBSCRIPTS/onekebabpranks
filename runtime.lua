@@ -2,9 +2,9 @@
 --  runtime.draft.lua   (bot account executor script — WORK IN PROGRESS)
 --  Combat: 4 connected M1s ragdoll a target (auto-target melee).
 --  Model: reads a STATE doc from GitHub { mode, target } and engages
---  the target until mode flips to "idle" (Stop). Also answers
---  on-demand "listplayers" requests by posting the player list to a
---  Discord webhook (so the panel can show player buttons).
+--  the target until mode flips to "idle" (Stop). Publishes the player
+--  list LIVE to a Discord webhook (on start, on join/leave, + 15s
+--  heartbeat) so the panel always has a fresh list to show as buttons.
 --  JOIN is native (admin open-joins; bot joins via Roblox "Join").
 -- ===============================================================
 
