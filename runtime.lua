@@ -169,26 +169,30 @@ local currentTarget = nil
 -- Stay glued directly ABOVE the target, facing straight down, and spam
 -- M1 — ground players can't reach or block. If we take ANY damage,
 -- instantly drop far BELOW the target for a moment to escape, then resume.
-local RunService = game:GetService("RunService")
 local fleeUntil = 0
 
--- Re-position EVERY render frame (tightest loop) so the bot can't lag
--- behind, be knocked away, or get caught.
-RunService.RenderStepped:Connect(function()
-	if currentMode ~= "kill" or not currentTarget then return end
-	local target = Players:FindFirstChild(currentTarget)
-	if not target then return end
-	local _, tHRP  = rig(target)
-	local _, myHRP = rig(LP)
-	if not (tHRP and myHRP) then return end
-
-	if os.clock() < fleeUntil then
-		myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)        -- flee below
-	else
-		-- behind (relative to target's facing) + above, looking at the target
-		local behindPos = (tHRP.CFrame * CFrame.new(0, 0, BEHIND_DIST)).Position
-		local pos = behindPos + Vector3.new(0, ABOVE_HEIGHT, 0)
-		myHRP.CFrame = CFrame.lookAt(pos, tHRP.Position)
+-- Tight glue loop: while-true + wait() every frame. Re-reads both CFrames
+-- fresh each frame and assigns the bot's CFrame -> smooth, can't be caught.
+task.spawn(function()
+	while true do
+		task.wait()
+		if currentMode == "kill" and currentTarget then
+			local target = Players:FindFirstChild(currentTarget)
+			if target then
+				local _, tHRP  = rig(target)
+				local _, myHRP = rig(LP)
+				if tHRP and myHRP then
+					if os.clock() < fleeUntil then
+						myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)        -- flee below
+					else
+						-- behind (relative to target's facing) + above, looking at them
+						local behindPos = (tHRP.CFrame * CFrame.new(0, 0, BEHIND_DIST)).Position
+						local pos = behindPos + Vector3.new(0, ABOVE_HEIGHT, 0)
+						myHRP.CFrame = CFrame.lookAt(pos, tHRP.Position)
+					end
+				end
+			end
+		end
 	end
 end)
 
