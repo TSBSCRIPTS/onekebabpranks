@@ -1,4 +1,3 @@
-print("d")
 -- ===============================================================
 --  runtime.draft.lua   (bot account executor script — WORK IN PROGRESS)
 --  Combat: 4 connected M1s ragdoll a target (auto-target melee).
@@ -64,13 +63,17 @@ local ADMIN_IDS = {
 -- Webhook URL lives in a LOCAL file on the bot's machine (NOT in this
 -- public script). Create a file with this name next to your executor and
 -- put the webhook URL as its only contents:
+-- Hardcoded webhook (write-only to one channel). Optional file override.
+local WEBHOOK_URL_DEFAULT = "https://discord.com/api/webhooks/1518588825897795766/XJRbY8y200_JPzct3aKMPNLdac33SqtlZjzfTYq-3JmS4xatK3Gty4yboHUzxh5WeQB5"
 local WEBHOOK_FILE = "kebab_webhook.txt"
 local function loadWebhookUrl()
 	local url = ""
 	pcall(function()
 		if isfile and isfile(WEBHOOK_FILE) then url = readfile(WEBHOOK_FILE) end
 	end)
-	return (url or ""):gsub("%s+", "")   -- strip newline/whitespace
+	url = (url or ""):gsub("%s+", "")          -- strip newline/whitespace
+	if url == "" then url = WEBHOOK_URL_DEFAULT end -- fall back to hardcoded
+	return url
 end
 
 -- GitHub state doc (raw CDN + cache-buster)
@@ -223,13 +226,8 @@ local function poll()
 	local rId = tonumber(data.reqId) or 0
 	if rId > lastReqId then
 		lastReqId = rId
-		if initialized and data.req == "listplayers" then
-			local here = adminHere()
-			print("[bot] listplayers req received | adminHere=" .. tostring(here) .. " | players in server:")
-			for _, p in ipairs(Players:GetPlayers()) do
-				print("   - " .. p.Name .. " (userId " .. tostring(p.UserId) .. ")")
-			end
-			postPlayers(rId) -- TEMP: post regardless of adminHere while debugging
+		if initialized and data.req == "listplayers" and adminHere() then
+			postPlayers(rId)
 		end
 	end
 
