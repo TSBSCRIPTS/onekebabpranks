@@ -50,7 +50,8 @@ local PUNCH_OFFSET_X  = 0
 local PUNCH_OFFSET_Y  = 8        -- your tuned value
 local COMBO_INTERVAL  = 0.35     -- delay between M1s (combo timing)
 -- positioning:
-local ABOVE_HEIGHT    = 7        -- studs ABOVE the target (higher = safer, but M1 must still reach)
+local ABOVE_HEIGHT    = 8        -- studs ABOVE the target (higher = safer, but M1 must still reach)
+local BEHIND_DIST     = 2.5      -- studs BEHIND the target (out of their swing)
 local SAFE_DEPTH      = 25       -- studs BELOW target to flee to when damaged
 local FLEE_TIME       = 0.6      -- seconds to stay below after taking damage
 
@@ -171,8 +172,9 @@ local currentTarget = nil
 local RunService = game:GetService("RunService")
 local fleeUntil = 0
 
--- Re-position every frame so the bot can't be knocked away or blocked.
-RunService.Heartbeat:Connect(function()
+-- Re-position EVERY render frame (tightest loop) so the bot can't lag
+-- behind, be knocked away, or get caught.
+RunService.RenderStepped:Connect(function()
 	if currentMode ~= "kill" or not currentTarget then return end
 	local target = Players:FindFirstChild(currentTarget)
 	if not target then return end
@@ -183,8 +185,10 @@ RunService.Heartbeat:Connect(function()
 	if os.clock() < fleeUntil then
 		myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)        -- flee below
 	else
-		local abovePos = tHRP.Position + Vector3.new(0, ABOVE_HEIGHT, 0)
-		myHRP.CFrame = CFrame.lookAt(abovePos, tHRP.Position)             -- glue above, facing down
+		-- behind (relative to target's facing) + above, looking at the target
+		local behindPos = (tHRP.CFrame * CFrame.new(0, 0, BEHIND_DIST)).Position
+		local pos = behindPos + Vector3.new(0, ABOVE_HEIGHT, 0)
+		myHRP.CFrame = CFrame.lookAt(pos, tHRP.Position)
 	end
 end)
 
