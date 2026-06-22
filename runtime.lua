@@ -48,12 +48,13 @@ end
 -- ===== CONFIG ==================================================
 local PUNCH_OFFSET_X  = 0
 local PUNCH_OFFSET_Y  = 8        -- your tuned value
-local COMBO_INTERVAL  = 0.35     -- delay between M1s (combo timing)
--- positioning:
-local ABOVE_HEIGHT    = 8        -- studs ABOVE the target (higher = safer, but M1 must still reach)
-local BEHIND_DIST     = 2.5      -- studs BEHIND the target (out of their swing)
-local SAFE_DEPTH      = 25       -- studs BELOW target to flee to when damaged
-local FLEE_TIME       = 0.6      -- seconds to stay below after taking damage
+local COMBO_INTERVAL  = 0.30     -- delay between M1s (keep the combo chained)
+-- downslam combo positioning:
+local UNDER_DIST      = 4        -- studs UNDER target for M1s 1-3 (pops them up)
+local ABOVE_HEIGHT    = 5        -- studs ABOVE target for the 4th M1 (downslam)
+local SAFE_DEPTH      = 25       -- studs BELOW target: rest spot / flee spot
+local POST_SLAM_WAIT  = 0.4      -- pause below after a downslam before re-combo
+local FLEE_TIME       = 0.6      -- seconds below after taking damage
 
 -- Admins (so only the bot in the admin's server answers list requests)
 local ADMIN_IDS = {
@@ -165,14 +166,13 @@ end
 local currentMode   = "idle"   -- "idle" | "kill" | "guardian"
 local currentTarget = nil
 
--- ===== COMBAT (glue above, flee below on damage) ==============
--- Stay glued directly ABOVE the target, facing straight down, and spam
--- M1 — ground players can't reach or block. If we take ANY damage,
--- instantly drop far BELOW the target for a moment to escape, then resume.
+-- ===== COMBAT (downslam combo: under x3 -> above slam -> below) ===
+-- M1s 1-3 from UNDER the target (pops them up), 4th M1 (the downslam)
+-- from ABOVE, then drop BELOW to rest. Flees below on any damage.
 local fleeUntil = 0
+local desiredOffset = CFrame.new(0, -SAFE_DEPTH, 0)   -- where the glue loop holds us
 
--- Tight glue loop: while-true + wait() every frame. Re-reads both CFrames
--- fresh each frame and assigns the bot's CFrame -> smooth, can't be caught.
+-- Smooth glue: every frame, lock to target.CFrame * desiredOffset.
 task.spawn(function()
 	while true do
 		task.wait()
@@ -183,29 +183,45 @@ task.spawn(function()
 			local tChar  = target and target.Character
 			local tHRP   = tChar and tChar:FindFirstChild("HumanoidRootPart")
 			if myHRP and tHRP then
-				-- direct CFrame lock with an offset (same smooth pattern as the
-				-- horse lock; NO lookAt, so no degenerate-when-overhead glitch).
-				-- offset in target's local space: +Y up, +Z behind. Bot inherits
-				-- the target's facing, so it faces their back -> toward them.
-				if os.clock() < fleeUntil then
-					myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)         -- flee below
-				else
-					myHRP.CFrame = tHRP.CFrame * CFrame.new(0, ABOVE_HEIGHT, BEHIND_DIST)
-				end
+				local off = (os.clock() < fleeUntil) and CFrame.new(0, -SAFE_DEPTH, 0) or desiredOffset
+				myHRP.CFrame = tHRP.CFrame * off
+				pcall(function() myHRP.AssemblyLinearVelocity = Vector3.zero end)  -- kill drift -> no jitter
 			end
 		end
 	end
 end)
 
--- Punch on a steady cadence whenever engaged and not fleeing.
+-- Combo cycle: 3 M1s from UNDER, 4th M1 (downslam) from ABOVE, rest BELOW.
+local function canAct()
+	return currentMode == "kill" and currentTarget
+		and os.clock() >= fleeUntil
+		and Players:FindFirstChild(currentTarget) ~= nil
+end
+
 task.spawn(function()
 	while true do
-		if currentMode == "kill" and currentTarget
-			and os.clock() >= fleeUntil
-			and Players:FindFirstChild(currentTarget) then
-			punch()
+		if canAct() then
+			-- M1s 1-3 from under (spool them up)
+			desiredOffset = CFrame.new(0, -UNDER_DIST, 0)
+			for _ = 1, 3 do
+				if not canAct() then break end
+				task.wait(0.05)              -- let the lock settle into position first
+				punch()
+				task.wait(COMBO_INTERVAL)
+			end
+			-- 4th M1 = downslam, from above
+			if canAct() then
+				desiredOffset = CFrame.new(0, ABOVE_HEIGHT, 0)
+				task.wait(0.05)
+				punch()
+				task.wait(COMBO_INTERVAL)
+			end
+			-- rest below (safe) before the next combo
+			desiredOffset = CFrame.new(0, -SAFE_DEPTH, 0)
+			task.wait(POST_SLAM_WAIT)
+		else
+			task.wait(0.1)
 		end
-		task.wait(COMBO_INTERVAL)
 	end
 end)
 
