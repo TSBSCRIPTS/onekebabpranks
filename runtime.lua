@@ -50,7 +50,7 @@ local PUNCH_OFFSET_X  = 0
 local PUNCH_OFFSET_Y  = 8        -- your tuned value
 local COMBO_INTERVAL  = 0.35     -- delay between M1s (combo timing)
 -- positioning:
-local ABOVE_HEIGHT    = 4        -- studs ABOVE the target (keep in M1 range; tune)
+local ABOVE_HEIGHT    = 7        -- studs ABOVE the target (higher = safer, but M1 must still reach)
 local SAFE_DEPTH      = 25       -- studs BELOW target to flee to when damaged
 local FLEE_TIME       = 0.6      -- seconds to stay below after taking damage
 
