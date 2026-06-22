@@ -1,7 +1,8 @@
 {
   "stateId": 0,
-  "reqId": 0,
+  "reqId": 1782150165775,
   "mode": "idle",
   "target": null,
-  "req": null
+  "req": "listplayers",
+  "reqBy": "ahiaufdieeins"
 }
