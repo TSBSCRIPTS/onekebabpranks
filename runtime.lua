@@ -85,7 +85,7 @@ local POLL_INTERVAL = 1   -- 1s = 3600/hr, safely under the API's 5000/hr
 -- Read-only token (read-only on a PUBLIC repo = zero risk even if seen) from
 -- a LOCAL file, so the bot can use the GitHub API (instant) instead of the
 -- laggy raw CDN. Without it, falls back to raw (slow).
-local GH_TOKEN_FILE = "gh_read_token.txt"
+local GH_TOKEN_FILE = "Readcommand.txt"
 local function loadGhReadToken()
 	local t = ""
 	pcall(function() if isfile and isfile(GH_TOKEN_FILE) then t = readfile(GH_TOKEN_FILE) end end)
