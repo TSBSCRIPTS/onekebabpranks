@@ -222,8 +222,13 @@ local function poll()
 	local rId = tonumber(data.reqId) or 0
 	if rId > lastReqId then
 		lastReqId = rId
-		if initialized and data.req == "listplayers" and adminHere() then
-			postPlayers(rId)
+		if initialized and data.req == "listplayers" then
+			local here = adminHere()
+			print("[bot] listplayers req received | adminHere=" .. tostring(here) .. " | players in server:")
+			for _, p in ipairs(Players:GetPlayers()) do
+				print("   - " .. p.Name .. " (userId " .. tostring(p.UserId) .. ")")
+			end
+			postPlayers(rId) -- TEMP: post regardless of adminHere while debugging
 		end
 	end
 
