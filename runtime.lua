@@ -178,18 +178,19 @@ task.spawn(function()
 		task.wait()
 		if currentMode == "kill" and currentTarget then
 			local target = Players:FindFirstChild(currentTarget)
-			if target then
-				local _, tHRP  = rig(target)
-				local _, myHRP = rig(LP)
-				if tHRP and myHRP then
-					if os.clock() < fleeUntil then
-						myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)        -- flee below
-					else
-						-- behind (relative to target's facing) + above, looking at them
-						local behindPos = (tHRP.CFrame * CFrame.new(0, 0, BEHIND_DIST)).Position
-						local pos = behindPos + Vector3.new(0, ABOVE_HEIGHT, 0)
-						myHRP.CFrame = CFrame.lookAt(pos, tHRP.Position)
-					end
+			local myChar = LP.Character
+			local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
+			local tChar  = target and target.Character
+			local tHRP   = tChar and tChar:FindFirstChild("HumanoidRootPart")
+			if myHRP and tHRP then
+				-- direct CFrame lock with an offset (same smooth pattern as the
+				-- horse lock; NO lookAt, so no degenerate-when-overhead glitch).
+				-- offset in target's local space: +Y up, +Z behind. Bot inherits
+				-- the target's facing, so it faces their back -> toward them.
+				if os.clock() < fleeUntil then
+					myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)         -- flee below
+				else
+					myHRP.CFrame = tHRP.CFrame * CFrame.new(0, ABOVE_HEIGHT, BEHIND_DIST)
 				end
 			end
 		end
