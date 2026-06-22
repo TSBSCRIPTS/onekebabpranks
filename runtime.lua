@@ -1,3 +1,4 @@
+print("d")
 -- ===============================================================
 --  runtime.draft.lua   (bot account executor script — WORK IN PROGRESS)
 --  Combat: 4 connected M1s ragdoll a target (auto-target melee).
