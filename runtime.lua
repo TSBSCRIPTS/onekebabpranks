@@ -200,19 +200,41 @@ local function postWebhook(contentStr)
 	end
 end
 
-local function postPlayers(reqId)
-	print("[bot] postPlayers() for req", reqId)
+-- Publish the current player list to the webhook (LIVE cache).
+-- Only the bot in the admin's server publishes (so the panel's list is
+-- always for the right server).
+local function publishPlayers()
+	if not adminHere() then return end
 	local names = {}
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= LP then names[#names + 1] = p.Name end
 	end
-	local payload = HttpService:JSONEncode({ type = "players", players = names, reqId = reqId, ts = os.time() })
-	postWebhook(payload)
+	postWebhook(HttpService:JSONEncode({ type = "players", players = names, ts = os.time() }))
+	print("[bot] published " .. #names .. " players")
 end
 
--- ===== POLL THE STATE DOC =====================================
-local lastStateId, lastReqId = 0, 0
-local initialized = false
+-- Publish on join/leave (debounced so a burst doesn't spam), plus a heartbeat.
+local pendingPublish = false
+local function schedulePublish()
+	if pendingPublish then return end
+	pendingPublish = true
+	task.delay(1, function()
+		pendingPublish = false
+		publishPlayers()
+	end)
+end
+Players.PlayerAdded:Connect(schedulePublish)
+Players.PlayerRemoving:Connect(schedulePublish)
+
+task.spawn(function()
+	while true do
+		publishPlayers()   -- heartbeat (also the first publish at startup)
+		task.wait(15)
+	end
+end)
+
+-- ===== POLL THE STATE DOC (kill / stop target) ================
+local lastStateId = 0
 
 local function poll()
 	local url = RAW .. "?cb=" .. os.time() .. "_" .. tostring(math.random(1, 1000000))
@@ -222,7 +244,6 @@ local function poll()
 	local good, data = pcall(function() return HttpService:JSONDecode(body) end)
 	if not good or type(data) ~= "table" then return end
 
-	-- persistent state (apply even on first boot, so we resume targeting)
 	local sId = tonumber(data.stateId) or 0
 	if sId > lastStateId then
 		lastStateId   = sId
@@ -230,25 +251,10 @@ local function poll()
 		currentTarget = data.target
 		print("[bot] state ->", currentMode, currentTarget or "-")
 	end
-
-	-- one-shot requests (skip stale ones on first boot)
-	local rId = tonumber(data.reqId) or 0
-	if rId > lastReqId then
-		lastReqId = rId
-		if initialized and data.req == "listplayers" then
-			local here = adminHere()
-			print("[bot] listplayers req seen | adminHere=" .. tostring(here))
-			postWebhook("📋 req seen — adminHere=" .. tostring(here) .. ", players=" .. tostring(#Players:GetPlayers()))
-			if here then postPlayers(rId) end
-		end
-	end
-
-	initialized = true
 end
 
 task.spawn(function()
 	print("[bot] runtime online — watching", OWNER .. "/" .. REPO)
-	postWebhook("🤖 bot online — server " .. tostring(game.JobId))  -- visible startup ping
 	while true do
 		pcall(poll)
 		task.wait(POLL_INTERVAL)
