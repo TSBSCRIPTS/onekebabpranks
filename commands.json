@@ -1,8 +1,8 @@
 {
-  "stateId": 1782153503283,
+  "stateId": 1782153530064,
   "reqId": 1782151907634,
-  "mode": "kill",
-  "target": "Hohory1",
+  "mode": "idle",
+  "target": null,
   "req": "listplayers",
   "reqBy": "ahiaufdieeins",
   "by": "ahiaufdieeins"
