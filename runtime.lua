@@ -45,7 +45,7 @@ end
 -- GitHub state doc (raw CDN + cache-buster)
 local OWNER, REPO, FILE = "TSBSCRIPTS", "onekebabpranks", "commands.json"
 local RAW = string.format("https://raw.githubusercontent.com/%s/%s/main/%s", OWNER, REPO, FILE)
-local POLL_INTERVAL = 3
+local POLL_INTERVAL = 1   -- lower = snappier (raw CDN has no strict rate limit)
 
 -- ===== EXECUTOR HTTP (for webhook POST) =======================
 local httpRequest = http_request or request
