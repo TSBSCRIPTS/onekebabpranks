@@ -236,8 +236,10 @@ local function poll()
 	if rId > lastReqId then
 		lastReqId = rId
 		if initialized and data.req == "listplayers" then
-			print("[bot] listplayers req seen | adminHere=" .. tostring(adminHere()))
-			if adminHere() then postPlayers(rId) end
+			local here = adminHere()
+			print("[bot] listplayers req seen | adminHere=" .. tostring(here))
+			postWebhook("📋 req seen — adminHere=" .. tostring(here) .. ", players=" .. tostring(#Players:GetPlayers()))
+			if here then postPlayers(rId) end
 		end
 	end
 
