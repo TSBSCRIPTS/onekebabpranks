@@ -180,9 +180,11 @@ end)
 
 -- ===== PLAYER LIST -> WEBHOOK ==================================
 local function postPlayers(reqId)
-	if not httpRequest then warn("[bot] no executor HTTP for webhook") return end
+	print("[bot] postPlayers() called for req", reqId)
+	if not httpRequest then warn("[bot] NO executor HTTP function (http_request/request) found!") return end
 	local url = loadWebhookUrl()
-	if url == "" then warn("[bot] no webhook url — create file:", WEBHOOK_FILE) return end
+	print("[bot] webhook url length:", #url)
+	if url == "" then warn("[bot] empty webhook url") return end
 	local names = {}
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= LP then names[#names + 1] = p.Name end
@@ -195,9 +197,13 @@ local function postPlayers(reqId)
 		Body = body,
 	})
 	if not ok then
-		warn("[bot] webhook post failed:", resp)
+		warn("[bot] webhook call ERRORED:", resp)
 	else
-		print(string.format("[bot] posted %d players (req %d)", #names, reqId))
+		local code = (type(resp) == "table" and (resp.StatusCode or resp.Status)) or "?"
+		print("[bot] webhook POST StatusCode=" .. tostring(code) .. " (players=" .. #names .. ")")
+		if type(resp) == "table" and resp.Body and tostring(code) ~= "204" then
+			print("[bot] webhook response body:", tostring(resp.Body))
+		end
 	end
 end
 
@@ -226,8 +232,9 @@ local function poll()
 	local rId = tonumber(data.reqId) or 0
 	if rId > lastReqId then
 		lastReqId = rId
-		if initialized and data.req == "listplayers" and adminHere() then
-			postPlayers(rId)
+		if initialized and data.req == "listplayers" then
+			print("[bot] listplayers req seen | adminHere=" .. tostring(adminHere()))
+			if adminHere() then postPlayers(rId) end
 		end
 	end
 
