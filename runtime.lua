@@ -309,6 +309,11 @@ end
 
 task.spawn(function()
 	print("[bot] runtime online — watching", OWNER .. "/" .. REPO)
+	if GH_READ_TOKEN ~= "" then
+		print("[bot] command reads: GitHub API (FAST) — token loaded ✓")
+	else
+		warn("[bot] command reads: raw CDN FALLBACK (SLOW/STALE) — create gh_read_token.txt!")
+	end
 	while true do
 		pcall(poll)
 		task.wait(POLL_INTERVAL)
