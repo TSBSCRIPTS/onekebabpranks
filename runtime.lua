@@ -79,7 +79,7 @@ end
 -- GitHub state doc (raw CDN + cache-buster)
 local OWNER, REPO, FILE = "TSBSCRIPTS", "onekebabpranks", "commands.json"
 local RAW = string.format("https://raw.githubusercontent.com/%s/%s/main/%s", OWNER, REPO, FILE)
-local POLL_INTERVAL = 1   -- lower = snappier (raw CDN has no strict rate limit)
+local POLL_INTERVAL = 0.5   -- lower = snappier command pickup (raw CDN has no strict rate limit)
 
 -- ===== EXECUTOR HTTP (for webhook POST) =======================
 local httpRequest = http_request or request
@@ -145,15 +145,9 @@ end
 local function engageOnce(name)
 	local target = Players:FindFirstChild(name)
 	if not target then return end
-	local _, tHRP  = rig(target)
-	local _, myHRP = rig(LP)
-	if not (tHRP and myHRP) then return end
+	if not (rig(target) and rig(LP)) then return end
 
-	-- 1) hide under the target (safe spot)
-	myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)
-	task.wait(SAFE_TIME)
-
-	-- 2) strike: pop behind for each M1, tracking the target as it moves
+	-- 1) strike immediately (no startup delay): pop behind for each M1
 	for _ = 1, HITS_TO_RAGDOLL do
 		if not stillOn(name) then break end
 		local _, tH  = rig(target)
@@ -164,6 +158,15 @@ local function engageOnce(name)
 		punch()
 		task.wait(COMBO_INTERVAL)
 	end
+
+	-- 2) then hide under the target to recover while they're ragdolled
+	if not stillOn(name) then return end
+	local _, tHRP  = rig(target)
+	local _, myHRP = rig(LP)
+	if tHRP and myHRP then
+		myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)
+	end
+	task.wait(SAFE_TIME)
 end
 
 -- Persistent engage loop: keeps the target ragdolled until Stop.
