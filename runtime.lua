@@ -18,10 +18,12 @@ local LP = Players.LocalPlayer
 -- ===== CONFIG ==================================================
 local PUNCH_OFFSET_X  = 0
 local PUNCH_OFFSET_Y  = 8        -- your tuned value
-local APPROACH_DIST   = 6        -- studs: how close before we punch
 local HITS_TO_RAGDOLL = 4        -- 4 M1s = ragdoll
-local COMBO_INTERVAL  = 0.35     -- delay between M1s
-local TICK            = 0.12     -- chase loop delay
+local COMBO_INTERVAL  = 0.35     -- delay between M1s (combo timing)
+-- hit-and-run positioning:
+local SAFE_DEPTH      = 25       -- studs BELOW the target to hide (safe spot)
+local BEHIND_DIST     = 3.5      -- studs behind the target when striking
+local SAFE_TIME       = 1.0      -- seconds hidden under between combos
 
 -- Admins (so only the bot in the admin's server answers list requests)
 local ADMIN_IDS = {
@@ -99,27 +101,34 @@ end
 local currentMode   = "idle"   -- "idle" | "kill" | "guardian"
 local currentTarget = nil
 
--- ===== COMBAT =================================================
--- One combo pass: chase + up to HITS_TO_RAGDOLL connected M1s.
--- Bails immediately if the state changed (target swapped / stopped).
+-- ===== COMBAT (hit-and-run) ===================================
+-- Hide UNDER the target (can't be hit), then snap BEHIND for the M1
+-- burst, then the loop drops us back under. Bails if state changes.
+local function stillOn(name)
+	return currentMode == "kill" and currentTarget == name
+end
+
 local function engageOnce(name)
 	local target = Players:FindFirstChild(name)
 	if not target then return end
-	local landed = 0
-	while target.Parent and landed < HITS_TO_RAGDOLL
-		and currentMode == "kill" and currentTarget == name do
-		local _, myHRP, myHum = rig(LP)
-		local _, tHRP         = rig(target)
-		if not (myHRP and tHRP and myHum) then break end
-		local dist = (myHRP.Position - tHRP.Position).Magnitude
-		if dist <= APPROACH_DIST then
-			punch()
-			landed += 1
-			task.wait(COMBO_INTERVAL)
-		else
-			myHum:MoveTo(tHRP.Position)   -- close gap (auto-faces target)
-			task.wait(TICK)
-		end
+	local _, tHRP  = rig(target)
+	local _, myHRP = rig(LP)
+	if not (tHRP and myHRP) then return end
+
+	-- 1) hide under the target (safe spot)
+	myHRP.CFrame = tHRP.CFrame * CFrame.new(0, -SAFE_DEPTH, 0)
+	task.wait(SAFE_TIME)
+
+	-- 2) strike: pop behind for each M1, tracking the target as it moves
+	for _ = 1, HITS_TO_RAGDOLL do
+		if not stillOn(name) then break end
+		local _, tH  = rig(target)
+		local _, myH = rig(LP)
+		if not (tH and myH) then break end
+		local behindPos = (tH.CFrame * CFrame.new(0, 0, BEHIND_DIST)).Position
+		myH.CFrame = CFrame.lookAt(behindPos, tH.Position)  -- behind + facing them
+		punch()
+		task.wait(COMBO_INTERVAL)
 	end
 end
 
