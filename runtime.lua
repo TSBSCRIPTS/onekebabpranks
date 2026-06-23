@@ -55,6 +55,8 @@ local ABOVE_HEIGHT    = 5        -- studs ABOVE target for the 4th M1 (downslam)
 local SAFE_DEPTH      = 25       -- studs BELOW target: rest spot / flee spot
 local POST_SLAM_WAIT  = 0.4      -- pause below after a downslam before re-combo
 local FLEE_TIME       = 0.6      -- seconds below after taking damage
+local LOW_HEALTH      = 25       -- below this HP -> retreat very high to regen
+local RETREAT_HEIGHT  = 150      -- studs above target while recovering (out of all reach)
 
 -- Admins (so only the bot in the admin's server answers list requests)
 local ADMIN_IDS = {
@@ -170,6 +172,8 @@ local currentTarget = nil
 -- M1s 1-3 from UNDER the target (pops them up), 4th M1 (the downslam)
 -- from ABOVE, then drop BELOW to rest. Flees below on any damage.
 local fleeUntil = 0
+local recovering = false        -- true while HP is low: hold high + pause combo
+local maxHealth = 100
 local desiredOffset = CFrame.new(0, -SAFE_DEPTH, 0)   -- where the glue loop holds us
 
 -- Smooth glue: every frame, lock to target.CFrame * desiredOffset.
@@ -183,7 +187,14 @@ task.spawn(function()
 			local tChar  = target and target.Character
 			local tHRP   = tChar and tChar:FindFirstChild("HumanoidRootPart")
 			if myHRP and tHRP then
-				local off = (os.clock() < fleeUntil) and CFrame.new(0, -SAFE_DEPTH, 0) or desiredOffset
+				local off
+				if recovering then
+					off = CFrame.new(0, RETREAT_HEIGHT, 0)     -- regen way up, out of reach
+				elseif os.clock() < fleeUntil then
+					off = CFrame.new(0, -SAFE_DEPTH, 0)        -- flee below
+				else
+					off = desiredOffset                         -- combo position
+				end
 				myHRP.CFrame = tHRP.CFrame * off
 				pcall(function() myHRP.AssemblyLinearVelocity = Vector3.zero end)  -- kill drift -> no jitter
 			end
@@ -194,6 +205,7 @@ end)
 -- Combo cycle: 3 M1s from UNDER, 4th M1 (downslam) from ABOVE, rest BELOW.
 local function canAct()
 	return currentMode == "kill" and currentTarget
+		and not recovering
 		and os.clock() >= fleeUntil
 		and Players:FindFirstChild(currentTarget) ~= nil
 end
@@ -231,7 +243,14 @@ end)
 -- Damage reaction: any health drop -> instantly flee below the target.
 local lastHealth = math.huge
 local function onHealth(h)
-	if h < lastHealth - 0.5 and currentMode == "kill" and currentTarget then
+	-- low-health recovery: retreat very high until fully healed again
+	if h <= LOW_HEALTH then
+		recovering = true
+	elseif h >= maxHealth - 0.5 then
+		recovering = false
+	end
+	-- flee below on damage (skip while recovering — already way up)
+	if h < lastHealth - 0.5 and not recovering and currentMode == "kill" and currentTarget then
 		fleeUntil = os.clock() + FLEE_TIME
 		local target = Players:FindFirstChild(currentTarget)
 		local _, tHRP  = rig(target)
@@ -248,7 +267,9 @@ local function hookHealth(char)
 	if not char then return end
 	local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 5)
 	if not hum then return end
+	maxHealth = hum.MaxHealth
 	lastHealth = hum.Health
+	recovering = hum.Health <= LOW_HEALTH   -- reset state on (re)spawn
 	hum.HealthChanged:Connect(onHealth)
 end
 hookHealth(LP.Character)
