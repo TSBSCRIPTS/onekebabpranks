@@ -201,20 +201,23 @@ end
 task.spawn(function()
 	while true do
 		if canAct() then
-			-- M1s 1-3 from under (spool them up)
+			-- M1s 1-2 from under (spool them up)
 			desiredOffset = CFrame.new(0, -UNDER_DIST, 0)
-			for _ = 1, 3 do
+			for _ = 1, 2 do
 				if not canAct() then break end
 				task.wait(0.05)              -- let the lock settle into position first
 				punch()
 				task.wait(COMBO_INTERVAL)
 			end
-			-- 4th M1 = downslam, from above
+			-- move ABOVE on the 3rd M1 so we're settled up there for the 4th (downslam)
 			if canAct() then
 				desiredOffset = CFrame.new(0, ABOVE_HEIGHT, 0)
-				task.wait(0.05)
-				punch()
-				task.wait(COMBO_INTERVAL)
+				for _ = 1, 2 do             -- M1 #3 (settle above) + M1 #4 (downslam)
+					if not canAct() then break end
+					task.wait(0.05)
+					punch()
+					task.wait(COMBO_INTERVAL)
+				end
 			end
 			-- rest below (safe) before the next combo
 			desiredOffset = CFrame.new(0, -SAFE_DEPTH, 0)
